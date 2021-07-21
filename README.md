@@ -1,3 +1,15 @@
+This project is a fork of https://github.com/rweather/noise-java. The goal of
+this fork is to make Noise-Java available via common artifact repositories like
+[Maven Central](https://search.maven.org/). Substantive changes will be offered
+as pull requests upstream wherever possible.
+
+To avoid namespace collisions, the group identifier in this project's POM has
+been changed to `org.signal`, though package names within the artifact have not
+changed.
+
+The original README continues below.
+
+----
 
 Noise-Java Library
 ==================
@@ -28,7 +40,7 @@ If you have better implementations of the cryptographic primitives
 available, you can modify the createDH(), createCipher(), and
 createHash() functions in the "Noise" class to integrate your versions.
 
-The [package documentation](http://rweather.github.io/noise-java/index.html)
+The [package documentation](https://rweather.github.io/noise-java/index.html)
 contains more information on the classes in the Noise-Java library.
 
 For more information on this library, to report bugs, to contribute,

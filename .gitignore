@@ -4,3 +4,5 @@ target
 .project
 doc
 *.class
+*.iml
+.idea/

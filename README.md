@@ -4,8 +4,8 @@ this fork is to make Noise-Java available via common artifact repositories like
 as pull requests upstream wherever possible.
 
 To avoid namespace collisions, the group identifier in this project's POM has
-been changed to `org.signal`, though package names within the artifact have not
-changed.
+been changed to `org.signal.forks`, though package names within the artifact
+have not changed.
 
 The original README continues below.
 

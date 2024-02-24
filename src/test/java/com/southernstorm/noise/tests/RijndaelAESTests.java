@@ -22,13 +22,12 @@
 
 package com.southernstorm.noise.tests;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import java.util.Arrays;
 
-import org.junit.Test;
-
 import com.southernstorm.noise.crypto.RijndaelAES;
+import org.junit.jupiter.api.Test;
 
 /**
  * AES test cases to verify the fallback RijndaelAES implementation.

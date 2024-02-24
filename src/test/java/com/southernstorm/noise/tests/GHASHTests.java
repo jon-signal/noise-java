@@ -22,13 +22,12 @@
 
 package com.southernstorm.noise.tests;
 
-import static org.junit.Assert.*;
-
 import java.util.Arrays;
 
-import org.junit.Test;
-
 import com.southernstorm.noise.crypto.GHASH;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 public class GHASHTests {
 

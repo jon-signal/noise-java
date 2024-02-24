@@ -22,18 +22,17 @@
 
 package com.southernstorm.noise.tests;
 
-import static org.junit.Assert.*;
-
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.ShortBufferException;
 
-import org.junit.Test;
-
 import com.southernstorm.noise.protocol.CipherState;
 import com.southernstorm.noise.protocol.Noise;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Perform tests on the cipher algorithms used by Noise.
@@ -43,51 +42,35 @@ public class CipherStateTests {
 	private void testCipher(String name, int keyLen, int macLen,
 							String key, long nonce, String ad,
 							String plaintext, String ciphertext,
-							String mac, boolean forceFallbacks)
-	{
+							String mac, boolean forceFallbacks) throws NoSuchAlgorithmException, ShortBufferException, BadPaddingException {
 		byte[] keyBytes = TestUtils.stringToData(key);
 		byte[] adBytes = TestUtils.stringToData(ad);
 		byte[] plaintextBytes = TestUtils.stringToData(plaintext);
 		byte[] ciphertextBytes;
-		byte[] buffer;
 		if (ciphertext.length() > 0)
 			ciphertextBytes = TestUtils.stringToData(ciphertext + mac.substring(2));
 		else
 			ciphertextBytes = TestUtils.stringToData(mac);
 
+		final byte[] plaintextBuffer = new byte[plaintextBytes.length];
+		final byte[] ciphertextBuffer = new byte[ciphertextBytes.length];
+
 		// Create the cipher object and check its properties.
-		CipherState cipher = null;
 		Noise.setForceFallbacks(forceFallbacks);
-		try {
-			cipher = Noise.createCipher(name);
-		} catch (NoSuchAlgorithmException e) {
-			fail(name + " cipher is not supported");
-		}
+		final CipherState cipher = Noise.createCipher(name);
 		assertEquals(name, cipher.getCipherName());
 		assertEquals(keyLen, cipher.getKeyLength());
 		assertEquals(0, cipher.getMACLength()); // Key has not been set yet.
 		
 	    // Try to encrypt.  Because the key is not set yet, this will
 	    // return the plaintext as-is.
-		try {
-			buffer = new byte [plaintextBytes.length];
-			Arrays.fill(buffer, (byte)0xAA);
-			assertEquals(plaintextBytes.length, cipher.encryptWithAd(adBytes, plaintextBytes, 0, buffer, 0, plaintextBytes.length));
-			assertArrayEquals(plaintextBytes, buffer);
-		} catch (ShortBufferException e) {
-			fail("Buffer should have been big enough");
-		}
-		
+		Arrays.fill(plaintextBuffer, (byte)0xAA);
+		assertEquals(plaintextBytes.length, cipher.encryptWithAd(adBytes, plaintextBytes, 0, plaintextBuffer, 0, plaintextBytes.length));
+		assertArrayEquals(plaintextBytes, plaintextBuffer);
+
 		// Try to decrypt.  Will return the ciphertext and MAC as-is.
-		buffer = new byte [ciphertextBytes.length];
-		Arrays.fill(buffer, (byte)0xAA);
-		try {
-			assertEquals(ciphertextBytes.length, cipher.decryptWithAd(adBytes, ciphertextBytes, 0, buffer, 0, ciphertextBytes.length));
-		} catch (BadPaddingException e) {
-			fail();
-		} catch (ShortBufferException e) {
-			fail();
-		}
+		Arrays.fill(ciphertextBuffer, (byte)0xAA);
+		assertEquals(ciphertextBytes.length, cipher.decryptWithAd(adBytes, ciphertextBytes, 0, ciphertextBuffer, 0, ciphertextBytes.length));
 
 		// Set the key and fast-forward the nonce.
 		cipher.initializeKey(keyBytes, 0);
@@ -95,39 +78,24 @@ public class CipherStateTests {
 		assertEquals(macLen, cipher.getMACLength());
 		
 		// Encrypt the data.
-		try {
-			buffer = new byte [ciphertextBytes.length];
-			Arrays.fill(buffer, (byte)0xAA);
-			assertEquals(ciphertextBytes.length, cipher.encryptWithAd(adBytes, plaintextBytes, 0, buffer, 0, plaintextBytes.length));
-			assertArrayEquals(ciphertextBytes, buffer);
-		} catch (ShortBufferException e) {
-			fail("Buffer should have been big enough");
-		}
+		Arrays.fill(ciphertextBuffer, (byte)0xAA);
+		assertEquals(ciphertextBytes.length, cipher.encryptWithAd(adBytes, plaintextBytes, 0, ciphertextBuffer, 0, plaintextBytes.length));
+		assertArrayEquals(ciphertextBytes, ciphertextBuffer);
 
 	    // Try to decrypt.  The MAC check should fail because the internal
 	    // nonce was incremented and no longer matches the parameter.
-		try {
-			cipher.decryptWithAd(adBytes, ciphertextBytes, 0, buffer, 0, ciphertextBytes.length);
-			fail();
-		} catch (BadPaddingException e) {
-			// Success!
-		} catch (ShortBufferException e) {
-			fail();
-		}
-		
+		assertThrows(BadPaddingException.class, () ->
+				cipher.decryptWithAd(adBytes, ciphertextBytes, 0, ciphertextBuffer, 0, ciphertextBytes.length));
+
 	    // Fast-forward the nonce to just before the rollover.  We will be able
 	    // to encrypt one more block, and then the next request will be rejected.
 		cipher.setNonce(-2L);
 		try {
-			buffer = new byte [ciphertextBytes.length];
-			Arrays.fill(buffer, (byte)0xAA);
-			cipher.encryptWithAd(adBytes, plaintextBytes, 0, buffer, 0, plaintextBytes.length);
-			try {
-				cipher.encryptWithAd(adBytes, plaintextBytes, 0, buffer, 0, plaintextBytes.length);
-				fail();
-			} catch (IllegalStateException e) {
-				// Success!
-			}
+			Arrays.fill(ciphertextBuffer, (byte)0xAA);
+			cipher.encryptWithAd(adBytes, plaintextBytes, 0, ciphertextBuffer, 0, plaintextBytes.length);
+
+			assertThrows(IllegalStateException.class, () ->
+					cipher.encryptWithAd(adBytes, plaintextBytes, 0, ciphertextBuffer, 0, plaintextBytes.length));
 		} catch (ShortBufferException e) {
 			fail("Buffer should have been big enough");
 		}
@@ -138,57 +106,34 @@ public class CipherStateTests {
 		assertEquals(macLen, cipher.getMACLength());
 		
 		// Decrypt the test ciphertext and MAC.
-		try {
-			buffer = new byte [plaintextBytes.length];
-			Arrays.fill(buffer, (byte)0xAA);
-			assertEquals(plaintextBytes.length, cipher.decryptWithAd(adBytes, ciphertextBytes, 0, buffer, 0, ciphertextBytes.length));
-			assertArrayEquals(plaintextBytes, buffer);
-		} catch (BadPaddingException e) {
-			fail();
-		} catch (ShortBufferException e) {
-			fail();
-		}
+		Arrays.fill(plaintextBuffer, (byte)0xAA);
+		assertEquals(plaintextBytes.length, cipher.decryptWithAd(adBytes, ciphertextBytes, 0, plaintextBuffer, 0, ciphertextBytes.length));
+		assertArrayEquals(plaintextBytes, plaintextBuffer);
 
-		try {
-			// Fast-forward the nonce to just before the rollover.  We will be able
-			// to decrypt one more block, and then the next request will be rejected.
-			cipher.setNonce(-2L);
+		// Fast-forward the nonce to just before the rollover.  We will be able
+		// to decrypt one more block, and then the next request will be rejected.
+		cipher.setNonce(-2L);
 
-			buffer = new byte [plaintextBytes.length];
-			Arrays.fill(buffer, (byte)0xAA);
-			try {
-				cipher.decryptWithAd(adBytes, ciphertextBytes, 0, buffer, 0, ciphertextBytes.length);
-				fail();
-			} catch (BadPaddingException e) {
-				// Success!
-			}
+		Arrays.fill(plaintextBuffer, (byte)0xAA);
+		assertThrows(BadPaddingException.class, () ->
+				cipher.decryptWithAd(adBytes, ciphertextBytes, 0, plaintextBuffer, 0, ciphertextBytes.length));
 
-			cipher.setNonce(-1L);
+		cipher.setNonce(-1L);
 
-			try {
-				cipher.decryptWithAd(adBytes, ciphertextBytes, 0, buffer, 0, ciphertextBytes.length);
-				fail();
-			} catch (IllegalStateException e) {
-				// Success!
-			} catch (BadPaddingException e) {
-				fail();
-			}
-		} catch (ShortBufferException e) {
-			fail("Buffer should have been big enough");
-		}
+		assertThrows(IllegalStateException.class, () ->
+				cipher.decryptWithAd(adBytes, ciphertextBytes, 0, plaintextBuffer, 0, ciphertextBytes.length));
 	}
 
 	private void testCipher(String name, int keyLen, int macLen,
 							String key, long nonce, String ad,
 							String plaintext, String ciphertext,
-							String mac)
-	{
+							String mac) throws ShortBufferException, NoSuchAlgorithmException, BadPaddingException {
 		testCipher(name, keyLen, macLen, key, nonce, ad, plaintext, ciphertext, mac, true);
 		testCipher(name, keyLen, macLen, key, nonce, ad, plaintext, ciphertext, mac, false);
 	}
 
 	@Test
-	public void AESGCM() {
+	public void AESGCM() throws ShortBufferException, NoSuchAlgorithmException, BadPaddingException {
 	    /* Test vectors for AES in GCM mode from Appendix B of:
 	       http://csrc.nist.gov/groups/ST/toolkit/BCM/documents/proposedmodes/gcm/gcm-revised-spec.pdf
 	       We can only use a few of the vectors because most of the IV's in the
@@ -216,7 +161,7 @@ public class CipherStateTests {
 	}
 
 	@Test
-	public void ChaChaPoly() {
+	public void ChaChaPoly() throws ShortBufferException, NoSuchAlgorithmException, BadPaddingException {
 		// ChaChaPoly test vectors from Appendix A.5 of RFC 7539.
 		testCipher
 			("ChaChaPoly", 32, 16,

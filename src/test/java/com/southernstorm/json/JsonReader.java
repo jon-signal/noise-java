@@ -30,7 +30,7 @@ import java.io.Reader;
  * 
  * Intentionally compatible with android.util.JsonReader.
  */
-public class JsonReader {
+public class JsonReader implements AutoCloseable {
 
 	private Reader in;
 	private JsonToken token;
@@ -54,6 +54,7 @@ public class JsonReader {
 		expectNext(JsonToken.BEGIN_OBJECT, "JSON begin object expected");
 	}
 
+	@Override
 	public void close() throws IOException {
 		in.close();
 	}

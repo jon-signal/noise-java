@@ -23,13 +23,13 @@
 package com.southernstorm.noise.tests;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.Reader;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.ShortBufferException;
@@ -39,6 +39,10 @@ import com.southernstorm.json.JsonReader;
 import com.southernstorm.noise.protocol.CipherState;
 import com.southernstorm.noise.protocol.CipherStatePair;
 import com.southernstorm.noise.protocol.HandshakeState;
+import org.junit.jupiter.api.Named;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,17 +50,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * Executes Noise vector tests in JSON format.
  */
 public class VectorTests {
-
-	private int total;
-	private int failed;
-	private int skipped;
-
-	public VectorTests()
-	{
-		total = 0;
-		failed = 0;
-		skipped = 0;
-	}
 
 	/**
 	 * Information about a handshake or transport message.
@@ -97,7 +90,7 @@ public class VectorTests {
 		public boolean failure_expected;
 		public boolean fallback_expected;
 		public TestMessage[] messages;
-		
+
 		public void addMessage(TestMessage msg)
 		{
 			TestMessage[] newMessages;
@@ -119,15 +112,17 @@ public class VectorTests {
 			assertEquals(expected[index], actual[index], msg + "[" + index + "]");
 	}
 
-	/**
-	 * Runs a Noise test vector.
-	 *
-	 * @param vec The test vector.
-	 * @param initiator Handshake object for the initiator.
-	 * @param responder Handshake object for the responder.
-	 */
-	private void runTest(TestVector vec, HandshakeState initiator, HandshakeState responder) throws ShortBufferException, BadPaddingException, NoSuchAlgorithmException
+	@ParameterizedTest
+	@MethodSource
+	void testVectors(TestVector vec) throws ShortBufferException, BadPaddingException, NoSuchAlgorithmException
 	{
+		HandshakeState initiator = new HandshakeState(vec.name, HandshakeState.INITIATOR);
+		HandshakeState responder = new HandshakeState(vec.name, HandshakeState.RESPONDER);
+		assertEquals(HandshakeState.INITIATOR, initiator.getRole());
+		assertEquals(HandshakeState.RESPONDER, responder.getRole());
+		assertEquals(vec.name, initiator.getProtocolName());
+		assertEquals(vec.name, responder.getProtocolName());
+
 		// Set all keys and special values that we need.
 		if (vec.init_prologue != null)
 			initiator.setPrologue(vec.init_prologue, 0, vec.init_prologue.length);
@@ -286,16 +281,20 @@ public class VectorTests {
 		respPair.destroy();
 	}
 
-	/**
-	 * Processes a single test vector from an input stream.
-	 *
-	 * @param reader The JSON reader for the input stream.
-	 *
-	 * The reader is positioned on the first field of the vector object.
-	 */
-	private void processVector(JsonReader reader) throws IOException
+	private static Stream<Arguments> testVectors() throws IOException {
+		try (InputStream testVectorInputStream = VectorTests.class.getResourceAsStream("test-vectors.json")) {
+			if (testVectorInputStream == null) {
+				throw new IOException("Could not load test vectors");
+			}
+
+			return loadTestVectors(testVectorInputStream).stream()
+					.map(testVector -> Arguments.of(Named.of(testVector.name, testVector)));
+		}
+	}
+
+	private static TestVector getNextVector(final JsonReader reader) throws IOException
 	{
-    boolean res = true;
+    	boolean res = true;
 		// Parse the contents of the test vector.
 		TestVector vec = new TestVector();
 		while (reader.hasNext()) {
@@ -382,116 +381,31 @@ public class VectorTests {
 		if (vec.name == null)
 			vec.name = protocolName;
 
-		// Execute the test vector.
-		++total;
-		System.out.print(vec.name);
-		System.out.print(" ... ");
-		System.out.flush();
-		try {
-			HandshakeState initiator = new HandshakeState(protocolName, HandshakeState.INITIATOR);
-			HandshakeState responder = new HandshakeState(protocolName, HandshakeState.RESPONDER);
-			assertEquals(HandshakeState.INITIATOR, initiator.getRole());
-			assertEquals(HandshakeState.RESPONDER, responder.getRole());
-			assertEquals(protocolName, initiator.getProtocolName());
-			assertEquals(protocolName, responder.getProtocolName());
-			runTest(vec, initiator, responder);
-			if (!vec.failure_expected) {
-				System.out.println("ok");
+		return vec;
+	}
+
+  private static List<TestVector> loadTestVectors(InputStream jsonInputStream) throws IOException {
+	List<TestVector> testVectors = new ArrayList<>();
+
+	try (JsonReader jsonReader = new JsonReader(new BufferedReader(new InputStreamReader(jsonInputStream)))) {
+		jsonReader.beginObject();
+		while (jsonReader.hasNext()) {
+			String name = jsonReader.nextName();
+			if (name.equals("vectors")) {
+				jsonReader.beginArray();
+				while (jsonReader.hasNext()) {
+					jsonReader.beginObject();
+					testVectors.add(getNextVector(jsonReader));
+					jsonReader.endObject();
+				}
+				jsonReader.endArray();
 			} else {
-				System.out.println("failure expected");
-				++failed;
-			}
-		} catch (NoSuchAlgorithmException e) {
-			System.out.println("unsupported");
-			++skipped;
-		} catch (AssertionError e) {
-			System.out.println(e.getMessage());
-			e.printStackTrace(System.out);
-			++failed;
-		} catch (Exception e) {
-			if (!vec.failure_expected) {
-				System.out.println("failed");
-				e.printStackTrace(System.out);
-				++failed;
-			} else {
-				System.out.println("ok");
+				jsonReader.skipValue();
 			}
 		}
-	}
-  public void processFile(String filename) throws IOException {
-    try {
-      try (FileInputStream fileStream = new FileInputStream(filename)) {
-        System.out.print(filename + ": ");
-        processInputStream(fileStream);
-      }
-    } catch (FileNotFoundException e) {
-      System.err.println(filename + ": File not found");
-    }
-  }
-
-
-  public void processInputStream(InputStream jsonInputStream) throws IOException {
-    try(Reader streamReader = new BufferedReader(new InputStreamReader(jsonInputStream))) {
-      processReader(streamReader);
-    }
-  }
-
-	public void processReader(Reader jsonStream) throws IOException {
-		total = 0;
-		skipped = 0;
-		failed = 0;
-    JsonReader reader = new JsonReader(jsonStream);
-    try {
-      reader.beginObject();
-      while (reader.hasNext()) {
-        String name = reader.nextName();
-        if (name.equals("vectors")) {
-          reader.beginArray();
-          while (reader.hasNext() /*&& total < 50*/) {
-            reader.beginObject();
-            processVector(reader);
-            reader.endObject();
-          }
-          reader.endArray();
-        } else {
-          reader.skipValue();
-        }
-      }
-      reader.endObject();
-    } catch (IOException e) {
-      System.err.println("Exception while parsing JSON: " + e);
-      e.printStackTrace();
-    } finally {
-      reader.close();
-    }
-		System.out.print(total);
-		System.out.print(" tests, ");
-		System.out.print(skipped);
-		System.out.print(" skipped, ");
-		System.out.print(failed);
-		System.out.println(" failed");
+		jsonReader.endObject();
 	}
 
-
-  public int getTotal() {
-    return total;
+	return testVectors;
   }
-
-  public int getFailed() {
-    return failed;
-  }
-
-  public int getSkipped() {
-    return skipped;
-  }
-
-  public static void main(String[] args) throws IOException {
-		if (args.length == 0) {
-			System.out.println("Usage: VectorTests file1 file2 ...");
-			return;
-		}
-		VectorTests app = new VectorTests();
-		for (String filename : args)
-			app.processFile(filename);
-	}
 }

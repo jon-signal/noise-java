@@ -22,8 +22,6 @@
 
 package com.southernstorm.noise.tests;
 
-import static org.junit.Assert.*;
-
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -41,6 +39,8 @@ import com.southernstorm.json.JsonReader;
 import com.southernstorm.noise.protocol.CipherState;
 import com.southernstorm.noise.protocol.CipherStatePair;
 import com.southernstorm.noise.protocol.HandshakeState;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Executes Noise vector tests in JSON format.
@@ -61,7 +61,7 @@ public class VectorTests {
 	/**
 	 * Information about a handshake or transport message.
 	 */
-	private class TestMessage
+	private static class TestMessage
 	{
 		public byte[] payload;
 		public byte[] ciphertext;
@@ -70,7 +70,7 @@ public class VectorTests {
 	/**
 	 * Information about a Noise test vector that was parsed from a JSON stream.
 	 */
-	private class TestVector
+	private static class TestVector
 	{
 		public String name;
 		public String pattern;
@@ -116,7 +116,7 @@ public class VectorTests {
 	private void assertSubArrayEquals(String msg, byte[] expected, byte[] actual)
 	{
 		for (int index = 0; index < expected.length; ++index)
-			assertEquals(msg + "[" + Integer.toString(index) + "]", expected[index], actual[index]);
+			assertEquals(expected[index], actual[index], msg + "[" + index + "]");
 	}
 
 	/**
@@ -169,12 +169,13 @@ public class VectorTests {
 		// Work through the messages one by one until both sides "split".
 		int role = HandshakeState.INITIATOR;
 		int index = 0;
-		HandshakeState send, recv;
 		boolean isOneWay = (vec.pattern.length() == 1);
 		boolean fallback = vec.fallback_expected;
 		byte[] message = new byte [8192];
 		byte[] plaintext = new byte [8192];
 		for (; index < vec.messages.length; ++index) {
+			final HandshakeState send, recv;
+
 			if (initiator.getAction() == HandshakeState.SPLIT &&
 					responder.getAction() == HandshakeState.SPLIT) {
 				break;
@@ -196,15 +197,11 @@ public class VectorTests {
 			TestMessage msg = vec.messages[index];
 			int len = send.writeMessage(message, 0, msg.payload, 0, msg.payload.length);
 			assertEquals(msg.ciphertext.length, len);
-			assertSubArrayEquals(Integer.toString(index) + ": ciphertext", msg.ciphertext, message);
+			assertSubArrayEquals(index + ": ciphertext", msg.ciphertext, message);
 			if (fallback) {
 				// Perform a read on the responder, which will fail.
-				try {
-					recv.readMessage(message, 0, len, plaintext, 0);
-					fail("read should have triggered fallback");
-				} catch (BadPaddingException e) {
-					// Success!
-				}
+				assertThrows(BadPaddingException.class, () -> recv.readMessage(message, 0, len, plaintext, 0),
+						"read should have triggered fallback");
 
 				// Look up the pattern to fall back to.
 				String pattern = vec.fallback_pattern;
@@ -224,7 +221,7 @@ public class VectorTests {
 			} else {
 				int plen = recv.readMessage(message, 0, len, plaintext, 0);
 				assertEquals(msg.payload.length, plen);
-				assertSubArrayEquals(Integer.toString(index) + ": payload", msg.payload, plaintext);
+				assertSubArrayEquals(index + ": payload", msg.payload, plaintext);
 			}
 		}
 		if (vec.fallback_expected) {
@@ -276,10 +273,10 @@ public class VectorTests {
 			}
 			int len = csend.encryptWithAd(null, msg.payload, 0, message, 0, msg.payload.length);
 			assertEquals(msg.ciphertext.length, len);
-			assertSubArrayEquals(Integer.toString(index) + ": ciphertext", msg.ciphertext, message);
+			assertSubArrayEquals(index + ": ciphertext", msg.ciphertext, message);
 			int plen = crecv.decryptWithAd(null, message, 0, plaintext, 0, len);
 			assertEquals(msg.payload.length, plen);
-			assertSubArrayEquals(Integer.toString(index) + ": payload", msg.payload, plaintext);
+			assertSubArrayEquals(index + ": payload", msg.payload, plaintext);
 		}
 
 		// Clean up.
@@ -462,7 +459,7 @@ public class VectorTests {
       }
       reader.endObject();
     } catch (IOException e) {
-      System.err.println("Exception while parsing JSON: " + e.toString());
+      System.err.println("Exception while parsing JSON: " + e);
       e.printStackTrace();
     } finally {
       reader.close();

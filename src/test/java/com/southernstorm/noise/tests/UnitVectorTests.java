@@ -1,8 +1,10 @@
 package com.southernstorm.noise.tests;
 
+import org.junit.jupiter.api.Test;
+
 import java.io.InputStream;
-import org.junit.Assert;
-import org.junit.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class UnitVectorTests {
 
@@ -11,7 +13,7 @@ public class UnitVectorTests {
     try (final InputStream stream = getClass().getResourceAsStream("test-vectors.json")) {
       VectorTests vectorTests = new VectorTests();
       vectorTests.processInputStream(stream);
-      Assert.assertEquals(vectorTests.getFailed(), 0);
+      assertEquals(vectorTests.getFailed(), 0);
     }
   }
 }
